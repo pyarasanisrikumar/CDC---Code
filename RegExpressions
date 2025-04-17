@@ -1,0 +1,27 @@
+# Initialize Spark session
+spark = SparkSession.builder.appName("ExtractTableNames").getOrCreate()
+ 
+# Example Spark SQL query
+query = """
+SELECT a.name, b.salary
+FROM employees a
+JOIN salaries b ON a.id = b.emp_id
+WHERE a.department = 'Engineering'
+"""
+ 
+# Regular expression to find table names
+table_pattern = re.compile(r'FROM\s+(\w+)|JOIN\s+(\w+)', re.IGNORECASE)
+ 
+# Extract table names
+tables = set()
+for match in table_pattern.findall(query):
+    tables.update(filter(None, match))
+ 
+# Convert set to list
+table_names = list(tables)
+ 
+# Display the table names
+print("Extracted table names:", table_names)
+ 
+# Stop the Spark session
+spark.stop()
