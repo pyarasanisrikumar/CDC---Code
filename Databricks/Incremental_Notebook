@@ -1,0 +1,50 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, to_date
+
+
+# Define source and target table names
+source_table = "edav_project_audit_logs.cdh.audit"
+target_table = "edav_prd_cdh.cdh_engineering_etl.analytics_cluster_silver"
+
+# Fetch the latest timestamp from the target table
+silver_df = spark.sql(f"SELECT MAX(event_date) AS latest_timestamp FROM {target_table}")
+silver_latest_timestamp = silver_df.collect()[0]["latest_timestamp"]
+
+print(f"Latest Timestamp from {target_table}: {silver_latest_timestamp}")
+
+# Fetch the latest timestamp from the source table
+audit_df = spark.sql(f"SELECT MAX(event_date) AS latest_timestamp FROM {source_table}")
+audit_latest_timestamp = audit_df.collect()[0]["latest_timestamp"]
+
+print(f"Latest Timestamp from {source_table}: {audit_latest_timestamp}")
+
+# Convert timestamps to date format (YYYY-MM-DD) for comparison
+if silver_latest_timestamp and audit_latest_timestamp:
+    silver_date = silver_latest_timestamp.strftime("%Y-%m-%d")
+    audit_date = audit_latest_timestamp.strftime("%Y-%m-%d")
+
+    # Exit notebook if the latest timestamp is from the same day
+    if silver_date == audit_date:
+        print("Latest timestamp is from the same day. Exiting the notebook.")
+        dbutils.notebook.exit("No new data to process.")
+
+# If timestamps are different, proceed with incremental data extraction
+df = spark.sql(f"""
+    select event_date, 
+            request_params.commandText, 
+            user_identity.email, 
+            request_params.clusterId, 
+            request_params.notebookId,
+            request_params.executionTime,
+            request_params.commandId
+    FROM {source_table}
+    WHERE event_date > '{silver_latest_timestamp}'
+    AND action_name = 'runCommand'
+""")
+
+# Append new records if available
+if df.count() > 0:
+
+    print(" Continue Process")
+else:
+    print("No new data to load.")
